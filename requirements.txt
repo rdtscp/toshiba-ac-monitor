@@ -1,0 +1,20 @@
+# Runtime dependencies for the microservice + history collector, pinned.
+#
+# Python: 3.11-3.13. NOT 3.14 - a known issue (KaSroka/h4de5 #282, Apr 2026)
+# has Python 3.14 + the Azure IoT Device SDK hang forever inside connect().
+# Pin the interpreter, not just the packages.
+#
+# No GUI deps: the macOS menu-bar client lives in the companion repo
+# (toshiba-ac-menubar). keyring is also omitted - on a server, credentials
+# come from environment variables (e.g. the systemd EnvironmentFile);
+# credentials.py imports keyring lazily and falls back to env vars when
+# it's absent.
+
+# Toshiba cloud + Azure IoT push telemetry (pulls in aiohttp + azure-iot-device).
+toshiba-ac==0.3.13
+
+# HTTP API (also a toshiba-ac transitive dep; pinned because we import it directly).
+aiohttp==3.14.1
+
+# Azure IoT Device SDK - the component sensitive to the Python 3.14 connect() hang.
+azure-iot-device==2.15.0rc1

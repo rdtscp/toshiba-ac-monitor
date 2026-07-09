@@ -1,0 +1,49 @@
+[Unit]
+Description=Toshiba AC microservice (read-only HTTP API for temps + history)
+Documentation=https://github.com/rdtscp/toshiba-ac-monitor
+# Needs the internet for the Toshiba cloud connection.
+After=network-online.target
+Wants=network-online.target
+# Throttle crash-loops so a wedged/rate-limited connection can't hammer
+# Toshiba's cloud: at most 5 starts per 5 minutes, else systemd gives up.
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+# Run as an unprivileged user, NOT root. Adjust to your Pi's user if not "pi".
+User=pi
+Group=pi
+
+# Where you cloned the repo + created the venv. Adjust if different.
+WorkingDirectory=/home/pi/toshiba-ac-monitor
+
+# Secrets live here (0600, owned by the service user), NEVER in the repo:
+#   TOSHIBA_USER=, TOSHIBA_PASS=, TOSHIBA_API_TOKEN=
+# See deploy/toshiba-menubar.env.example.
+EnvironmentFile=/home/pi/.toshiba_menubar/server.env
+Environment=PYTHONUNBUFFERED=1
+
+# --host 0.0.0.0 exposes it on the LAN; the server REFUSES this unless
+# TOSHIBA_API_TOKEN is set (provided via the EnvironmentFile above).
+ExecStart=/home/pi/toshiba-ac-monitor/.venv/bin/python -m metric_collector.server --source toshiba --host 0.0.0.0 --port 8787
+
+Restart=on-failure
+RestartSec=30
+
+# --- sandboxing / hardening ----------------------------------------------
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+# The only path the service needs to write: device.json + history.db.
+ReadWritePaths=/home/pi/.toshiba_menubar
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

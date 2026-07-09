@@ -1,0 +1,69 @@
+# --- Toshiba service specifics ---------------------------------------------
+# Persisted credentials / tokens / device registration live OUTSIDE the repo
+# in ~/.toshiba_menubar, but guard against anyone symlinking or copying them in.
+.toshiba_menubar/
+toshiba_menubar_state/
+config.json
+config.local.json
+*.sas
+*.token
+
+# Secrets
+.env
+.env.*
+*.env
+!*.env.example
+!.env.example
+
+# Local test databases (the real history.db lives in ~/.toshiba_menubar)
+*.db
+*.db-wal
+*.db-shm
+
+# --- Python ---------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Tooling caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- macOS ----------------------------------------------------------------
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+
+# --- Editors --------------------------------------------------------------
+.idea/
+.vscode/
+*.swp
