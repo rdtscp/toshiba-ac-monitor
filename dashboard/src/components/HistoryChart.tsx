@@ -15,11 +15,12 @@ import type { Reading } from '../types';
 import { fetchHistory } from '../api';
 import { ROOM_COLORS } from '../theme';
 
-type Range = '30d' | '7d' | '1d' | '12h' | '6h' | '1h';
-const RANGES: Range[] = ['30d', '7d', '1d', '12h', '6h', '1h'];
+type Range = '30d' | '7d' | '3d' | '1d' | '12h' | '6h' | '1h';
+const RANGES: Range[] = ['30d', '7d', '3d', '1d', '12h', '6h', '1h'];
 const RANGE_SECONDS: Record<Range, number> = {
   '30d': 30 * 24 * 3600,
   '7d': 7 * 24 * 3600,
+  '3d': 3 * 24 * 3600,
   '1d': 24 * 3600,
   '12h': 12 * 3600,
   '6h': 6 * 3600,
@@ -110,7 +111,7 @@ function humanizeSpan(seconds: number): string {
 }
 
 export function HistoryChart() {
-  const [range, setRange] = useState<Range>('6h');
+  const [range, setRange] = useState<Range>('3d');
   const [readings, setReadings] = useState<Reading[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
