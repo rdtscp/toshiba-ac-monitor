@@ -14,6 +14,8 @@ the companion repo
 [`toshiba-ac-menubar`](https://github.com/rdtscp/toshiba-ac-menubar) (a thin
 `http` client holding no credentials).
 
+![Web dashboard: per-room cards and indoor temperature history chart](example.png)
+
 ```
 daemon thread:  AcSource (AMQP push) ─publish_room─► SharedState + HistoryRecorder
 main thread:    aiohttp server (read-only) reads SharedState + history.db
