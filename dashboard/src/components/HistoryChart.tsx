@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Box,
+  Button,
   CircularProgress,
   Paper,
   Stack,
@@ -10,6 +11,7 @@ import {
   Typography,
 } from '@mui/material';
 import { LineChart } from '@mui/x-charts/LineChart';
+import { useDrawingArea, useSvgRef, useXScale } from '@mui/x-charts/hooks';
 import dayjs from 'dayjs';
 import type { Reading } from '../types';
 import { fetchHistory } from '../api';
@@ -104,6 +106,70 @@ function buildChart(readings: Reading[]) {
   return { x, series, transitions, legend };
 }
 
+// Drag horizontally on the chart to zoom the x-axis to the selection;
+// double-click to zoom back out. Rendered inside <LineChart>, so the x-charts
+// hooks give us the drawing area and the pixel↔time scale.
+const MIN_DRAG_PX = 8; // treat anything narrower as a click, not a zoom
+
+function ZoomOverlay({
+  onZoom,
+  onReset,
+}: {
+  onZoom: (min: Date, max: Date) => void;
+  onReset: () => void;
+}) {
+  const area = useDrawingArea();
+  const svgRef = useSvgRef();
+  const xScale = useXScale() as unknown as { invert: (px: number) => Date | number };
+  const [drag, setDrag] = useState<{ start: number; end: number } | null>(null);
+
+  const toPx = (e: { clientX: number }) => {
+    const svg = svgRef.current;
+    const left = svg ? svg.getBoundingClientRect().left : 0;
+    const px = e.clientX - left;
+    return Math.min(Math.max(px, area.left), area.left + area.width);
+  };
+
+  return (
+    <>
+      {drag && Math.abs(drag.end - drag.start) >= MIN_DRAG_PX && (
+        <rect
+          x={Math.min(drag.start, drag.end)}
+          y={area.top}
+          width={Math.abs(drag.end - drag.start)}
+          height={area.height}
+          fill="rgba(144, 202, 249, 0.2)"
+          stroke="rgba(144, 202, 249, 0.6)"
+          pointerEvents="none"
+        />
+      )}
+      <rect
+        x={area.left}
+        y={area.top}
+        width={area.width}
+        height={area.height}
+        fill="transparent"
+        cursor="crosshair"
+        onPointerDown={(e) => {
+          if (e.button !== 0) return;
+          e.currentTarget.setPointerCapture(e.pointerId);
+          const px = toPx(e);
+          setDrag({ start: px, end: px });
+        }}
+        onPointerMove={(e) => drag && setDrag({ ...drag, end: toPx(e) })}
+        onPointerUp={() => {
+          if (!drag) return;
+          setDrag(null);
+          const [lo, hi] = [drag.start, drag.end].sort((a, b) => a - b);
+          if (hi - lo < MIN_DRAG_PX) return;
+          onZoom(new Date(+xScale.invert(lo)), new Date(+xScale.invert(hi)));
+        }}
+        onDoubleClick={onReset}
+      />
+    </>
+  );
+}
+
 function humanizeSpan(seconds: number): string {
   if (seconds < 3600) return `${Math.round(seconds / 60)} min`;
   if (seconds < 86400) return `${(seconds / 3600).toFixed(1)} h`;
@@ -112,6 +178,7 @@ function humanizeSpan(seconds: number): string {
 
 export function HistoryChart() {
   const [range, setRange] = useState<Range>('3d');
+  const [zoom, setZoom] = useState<{ min: Date; max: Date } | null>(null);
   const [readings, setReadings] = useState<Reading[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -138,7 +205,6 @@ export function HistoryChart() {
   }, [range]);
 
   const { x, series, transitions, legend } = useMemo(() => buildChart(readings), [readings]);
-  const tickFormat = RANGE_SECONDS[range] <= 24 * 3600 ? 'HH:mm' : 'DD MMM';
 
   // Thicken each room's "on overlay" line.
   const lineSx = useMemo(() => {
@@ -150,8 +216,11 @@ export function HistoryChart() {
   }, [legend.length]);
 
   const nowMs = Date.now();
-  const xMin = new Date(nowMs - RANGE_SECONDS[range] * 1000);
-  const xMax = new Date(nowMs);
+  const xMin = zoom?.min ?? new Date(nowMs - RANGE_SECONDS[range] * 1000);
+  const xMax = zoom?.max ?? new Date(nowMs);
+  // Tick density follows the *visible* span, so a zoomed-in week shows times.
+  const visibleSpanSec = (xMax.getTime() - xMin.getTime()) / 1000;
+  const tickFormat = visibleSpanSec <= 24 * 3600 ? 'HH:mm' : 'DD MMM';
 
   const temps = readings.map((r) => r.indoor_c).filter((v): v is number => v != null);
   const yMin = temps.length ? Math.floor(Math.min(...temps)) - 2 : undefined;
@@ -165,18 +234,29 @@ export function HistoryChart() {
     <Paper sx={{ p: 2 }} elevation={3}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" mb={0.5}>
         <Typography variant="h6">Indoor temperature history</Typography>
-        <ToggleButtonGroup
-          size="small"
-          exclusive
-          value={range}
-          onChange={(_e, v: Range | null) => v && setRange(v)}
-        >
-          {RANGES.map((r) => (
-            <ToggleButton key={r} value={r}>
-              {r.toUpperCase()}
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
+        <Stack direction="row" spacing={1} alignItems="center">
+          {zoom && (
+            <Button size="small" onClick={() => setZoom(null)}>
+              Reset zoom
+            </Button>
+          )}
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={range}
+            onChange={(_e, v: Range | null) => {
+              if (!v) return;
+              setRange(v);
+              setZoom(null);
+            }}
+          >
+            {RANGES.map((r) => (
+              <ToggleButton key={r} value={r}>
+                {r.toUpperCase()}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+        </Stack>
       </Stack>
 
       <Typography variant="caption" color="text.secondary" display="block" mb={1}>
@@ -220,7 +300,12 @@ export function HistoryChart() {
               sx={lineSx}
               margin={{ left: 50, right: 20, top: 20, bottom: 40 }}
               grid={{ horizontal: true }}
-            />
+            >
+              <ZoomOverlay
+                onZoom={(min, max) => setZoom({ min, max })}
+                onReset={() => setZoom(null)}
+              />
+            </LineChart>
           </TransitionsCtx.Provider>
 
           {/* Custom legend (rooms + the on/off dot key). */}
