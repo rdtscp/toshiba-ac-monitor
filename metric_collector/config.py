@@ -22,7 +22,10 @@ from pathlib import Path
 from typing import Any, Optional
 
 
-APP_HOME = Path(os.path.expanduser("~/.toshiba_menubar"))
+# Overridable so a second collector (e.g. flat-monitor embedding this as a
+# library) keeps its own device.json — two processes sharing one Azure IoT
+# client identity kick each other off in a reconnect fight.
+APP_HOME = Path(os.path.expanduser(os.environ.get("TOSHIBA_APP_HOME", "~/.toshiba_menubar")))
 CONFIG_PATH = APP_HOME / "config.json"
 DEVICE_STATE_PATH = APP_HOME / "device.json"
 
