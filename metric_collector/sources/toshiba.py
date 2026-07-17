@@ -66,7 +66,12 @@ class ToshibaSource(AcSource):
         # asyncio.Events, created inside the loop in _main().
         self._stop_evt: Optional[asyncio.Event] = None
         self._refresh_evt: Optional[asyncio.Event] = None
-        self._backoff = ExponentialBackoff(base=2.0, cap=300.0)
+        # Cap of 30 min, not 5: every connect() attempt costs ~3 Toshiba
+        # /api/Consumer/Login calls (the lib retries internally), and the
+        # cloud 429-rate-limits logins. Retrying every 5 min keeps the
+        # limiter hot indefinitely; transient blips still reconnect within
+        # seconds via the early backoff steps.
+        self._backoff = ExponentialBackoff(base=2.0, cap=1800.0)
         self._device_state: Optional[DeviceState] = None
 
     # --- AcSource API (called from the UI thread) -----------------------
