@@ -75,3 +75,34 @@ def test_dummy_source_populates_state():
         assert all(isinstance(r.indoor_temperature, float) for r in snap.rooms)
     finally:
         src.stop()
+
+
+def test_connect_max_attempts_gives_up(monkeypatch):
+    """With connect_max_attempts set, repeated failed connects end the loop
+    instead of retrying forever (login rate-limiter protection)."""
+    import asyncio
+
+    from metric_collector.config import Config
+    from metric_collector.sources.toshiba import ToshibaSource
+    from metric_collector.state import ConnectionStatus, SharedState
+
+    cfg = Config(source="toshiba", connect_max_attempts=2)
+    state = SharedState()
+    src = ToshibaSource(state, cfg)
+
+    calls = {"n": 0}
+
+    async def failing_connect(creds):
+        calls["n"] += 1
+        raise RuntimeError("HTTP 429 calling /api/Consumer/Login")
+
+    monkeypatch.setattr(src, "_connect_and_run", failing_connect)
+    monkeypatch.setattr(
+        "metric_collector.sources.toshiba.resolve_credentials", lambda: object())
+    monkeypatch.setattr(
+        "metric_collector.sources.toshiba.load_device_state", lambda: object())
+    monkeypatch.setattr(src._backoff, "next_delay", lambda: 0.0)
+
+    asyncio.run(src._main())
+    assert calls["n"] == 2  # exactly the budget, then dormant
+    assert state.snapshot().status == ConnectionStatus.STOPPED

@@ -73,6 +73,9 @@ class ToshibaSource(AcSource):
         # seconds via the early backoff steps.
         self._backoff = ExponentialBackoff(base=2.0, cap=1800.0)
         self._device_state: Optional[DeviceState] = None
+        # Did the current connect attempt reach CONNECTED? (Distinguishes a
+        # failed login from an established session that later dropped.)
+        self._attempt_connected = False
 
     # --- AcSource API (called from the UI thread) -----------------------
 
@@ -121,17 +124,35 @@ class ToshibaSource(AcSource):
         self._device_state = load_device_state()
 
         first = True
+        failed_connects = 0  # consecutive attempts that never reached CONNECTED
         while not self._stop_evt.is_set():
             self.state.set_status(
                 ConnectionStatus.CONNECTING if first else ConnectionStatus.RECONNECTING
             )
             manager = None
+            self._attempt_connected = False
             try:
                 manager = await self._connect_and_run(creds)
+                failed_connects = 0
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
                 self.state.set_status(ConnectionStatus.ERROR, _short(exc))
+                if self._attempt_connected:
+                    # The session was established and later dropped; that is
+                    # not a failed connect. The next attempt starts a fresh
+                    # budget.
+                    failed_connects = 0
+                else:
+                    failed_connects += 1
+                max_attempts = self.config.connect_max_attempts
+                if max_attempts is not None and failed_connects >= max_attempts:
+                    # Go dormant rather than hammer the login rate limiter.
+                    print(
+                        f"[toshiba] giving up after {failed_connects} failed "
+                        f"connect attempt(s) (connect_max_attempts): {_short(exc)}"
+                    )
+                    break
             finally:
                 if manager is not None:
                     await _safe_shutdown(manager)
@@ -169,6 +190,7 @@ class ToshibaSource(AcSource):
             device.on_state_changed_callback.add(self._on_device_state_changed)
 
         self.state.set_status(ConnectionStatus.CONNECTED)
+        self._attempt_connected = True
         self._backoff.reset()
 
         # Initial publish from whatever state the library already has.
