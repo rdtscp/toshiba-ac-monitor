@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "toshiba-ac-monitor"
+version = "0.1.0"
+description = "Toshiba AC cloud telemetry collector: embeddable source library plus HTTP API server"
+# NOT 3.14: Python 3.14 + the Azure IoT Device SDK hang forever inside
+# connect() (KaSroka/h4de5 #282, Apr 2026). Pin the interpreter here too.
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "toshiba-ac==0.3.13",
+    "azure-iot-device==2.15.0rc1",
+]
+
+[project.optional-dependencies]
+# Only metric_collector/server.py imports aiohttp directly; embedders that
+# just want the source/StateSink surface don't need this pin.
+server = ["aiohttp==3.14.1"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["metric_collector"]

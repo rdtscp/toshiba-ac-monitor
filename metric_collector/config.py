@@ -22,7 +22,10 @@ from pathlib import Path
 from typing import Any, Optional
 
 
-APP_HOME = Path(os.path.expanduser("~/.toshiba_menubar"))
+# Overridable so a second collector (e.g. flat-monitor embedding this as a
+# library) keeps its own device.json — two processes sharing one Azure IoT
+# client identity kick each other off in a reconnect fight.
+APP_HOME = Path(os.path.expanduser(os.environ.get("TOSHIBA_APP_HOME", "~/.toshiba_menubar")))
 CONFIG_PATH = APP_HOME / "config.json"
 DEVICE_STATE_PATH = APP_HOME / "device.json"
 
@@ -65,6 +68,11 @@ class Config:
     # var (env wins) so it needn't sit in a plaintext config file.
     api_url: Optional[str] = None
     api_token: Optional[str] = None
+    # Give up after this many failed connect() attempts instead of retrying
+    # forever. The Toshiba cloud rate-limits /api/Consumer/Login hard, and
+    # every attempt burns ~3 login calls — an embedder that must not hammer
+    # the limiter sets 1. None = retry with backoff indefinitely (legacy).
+    connect_max_attempts: Optional[int] = None
 
     @classmethod
     def load(cls, path: Path = CONFIG_PATH) -> "Config":
