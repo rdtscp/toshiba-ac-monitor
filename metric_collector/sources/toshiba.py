@@ -150,7 +150,8 @@ class ToshibaSource(AcSource):
                     # Go dormant rather than hammer the login rate limiter.
                     print(
                         f"[toshiba] giving up after {failed_connects} failed "
-                        f"connect attempt(s) (connect_max_attempts): {_short(exc)}"
+                        f"connect attempt(s) (connect_max_attempts): {_short(exc)}",
+                        flush=True,  # must not sit in a buffered pipe
                     )
                     break
             finally:
